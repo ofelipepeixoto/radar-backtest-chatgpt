@@ -1,0 +1,10 @@
+{
+  "strategy-1": {
+    "datasetSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "entryFeeRatio": 0.001,
+    "exitFeeRatio": 0.001,
+    "slippageRatio": 0.0005,
+    "producerVersion": "synthetic-profile-pinned-23eeadc8",
+    "strategyVersion": "synthetic-scenario-v1"
+  }
+}

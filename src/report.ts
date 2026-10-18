@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { constants, openSync, fstatSync, readSync, closeSync } from 'node:fs';
+import { z } from 'zod';
+import { ExperimentContextSchema, OperatorContextSchema, extractExperimentContext, resolveOperatorContext, type ExperimentContext, type OperatorContext } from './context.js';
 
 export const MAX_BYTES = 2 * 1024 * 1024;
 export const MAX_TRADES = 10_000;
@@ -56,7 +58,78 @@ function rejectAmbiguousJson(text: string): void {
     }
   }
 }
-type Analysis = ReturnType<typeof analyze>;
+function rejectNonFiniteJson(root: unknown): void {
+  const pending: unknown[] = [root];
+  while (pending.length) {
+    const value = pending.pop();
+    if (typeof value === 'number' && !Number.isFinite(value)) fail();
+    if (value && typeof value === 'object') {
+      for (const item of Object.values(value)) pending.push(item);
+    }
+  }
+}
+export function parseStrictJson(bytes: Buffer, maxBytes = MAX_BYTES): unknown {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || bytes.length === 0 || bytes.length > maxBytes) return fail();
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const raw: unknown = JSON.parse(text);
+    rejectAmbiguousJson(text);
+    rejectNonFiniteJson(raw);
+    return raw;
+  } catch { return fail(); }
+}
+const boundedNumber = z.number().finite().min(-1e16).max(1e16);
+const count = z.number().int().min(0).max(MAX_TRADES);
+const checkedIssues = z.enum(['TOTAL_TRADES_MISMATCH', 'WINS_MISMATCH', 'LOSSES_MISMATCH', 'DRAWS_MISMATCH', 'PROFIT_TOTAL_ABS_MISMATCH', 'PROFIT_TOTAL_MISMATCH']);
+export const AnalysisSchema = z.object({
+  strategyId: z.string().regex(/^strategy-([1-9]|[12][0-9]|3[0-2])$/),
+  derived: z.object({
+    tradeCount: count, wins: count, losses: count, draws: count,
+    outcomeBasis: z.literal('EXPORTED_PROFIT_RATIO'),
+    winRateRatio: z.number().finite().min(0).max(1).nullable(),
+    startingBalanceStakeUnits: z.number().finite().positive().max(AMOUNT_LIMIT),
+    netProfitStakeUnits: boundedNumber,
+    closedTradeReturnRatio: z.number().finite(),
+    profitFactor: z.number().finite().min(0).nullable(),
+    profitFactorStatus: z.enum(['NO_TRADES', 'NO_LOSSES_UNDEFINED', 'DEFINED']),
+  }).strict(),
+  reportedUnverified: z.object({
+    total_trades: count.optional(), wins: count.optional(), losses: count.optional(), draws: count.optional(),
+    profit_total_abs: boundedNumber.optional(), profit_total: boundedNumber.optional(),
+    max_relative_drawdown: z.number().finite().min(0).max(1e6).optional(),
+    max_drawdown_account: z.number().finite().min(0).max(1e6).optional(),
+    profit_factor: z.number().finite().min(0).max(1e16).optional(),
+  }).strict(),
+  consistency: z.object({
+    status: z.enum(['MISMATCH', 'NO_MISMATCH_IN_CHECKED_FIELDS', 'NO_FIELDS_CHECKED']),
+    checkedFieldCount: z.number().int().min(0).max(6), issues: z.array(checkedIssues).max(6),
+  }).strict(),
+  interpretation: z.object({
+    units: z.literal('Amounts use the export stake currency; ratios are fractions, not percentages.'),
+    drawdown: z.literal('max_relative_drawdown is the largest relative drawdown; max_drawdown_account is the relative drawdown of the largest absolute loss episode. Neither is recomputed here.'),
+    scope: z.literal('Closed and force-exited trades only; floating-point descriptive calculations, not accounting or a forecast.'),
+  }).strict(),
+  limitations: z.tuple([z.literal('BACKTEST_ONLY'), z.literal('SOURCE_NOT_AUTHENTICATED'), z.literal('COSTS_NOT_INDEPENDENTLY_VERIFIED'), z.literal('LOOKAHEAD_AND_RECURSIVE_BIAS_NOT_TESTED'), z.literal('OUT_OF_SAMPLE_NOT_VERIFIED'), z.literal('NO_INVESTMENT_RECOMMENDATION')]),
+  executionEnabled: z.literal(false),
+}).strict();
+export type Analysis = z.infer<typeof AnalysisSchema>;
+export const AnalysisWithContextSchema = AnalysisSchema.extend({ context: ExperimentContextSchema });
+export type AnalysisWithContext = z.infer<typeof AnalysisWithContextSchema>;
+export const ReportSnapshotSchema = z.object({
+  schemaVersion: z.literal(2), parserVersion: z.literal('freqtrade-reduced-v2'),
+  reportSha256: z.string().regex(/^[a-f0-9]{64}$/), demo: z.boolean(),
+  analyses: z.array(AnalysisWithContextSchema).min(1).max(MAX_STRATEGIES),
+}).strict().refine(s => new Set(s.analyses.map(a => a.strategyId)).size === s.analyses.length
+  && s.analyses.reduce((n, a) => n + a.derived.tradeCount, 0) <= MAX_TRADES
+  && s.analyses.every((a, i) => a.strategyId === `strategy-${i + 1}`
+    && a.context.startingBalanceStakeUnits.value === a.derived.startingBalanceStakeUnits
+    && a.derived.wins + a.derived.losses + a.derived.draws === a.derived.tradeCount
+    && a.derived.winRateRatio === (a.derived.tradeCount ? a.derived.wins / a.derived.tradeCount : null)
+    && a.derived.closedTradeReturnRatio === a.derived.netProfitStakeUnits / a.derived.startingBalanceStakeUnits
+    && (a.derived.profitFactor === null) === (a.derived.profitFactorStatus !== 'DEFINED')
+    && (a.derived.tradeCount === 0) === (a.derived.profitFactorStatus === 'NO_TRADES')
+    && (a.consistency.status === 'MISMATCH') === (a.consistency.issues.length > 0)));
+export type ReportSnapshot = z.infer<typeof ReportSnapshotSchema>;
 function analyze(stats: Record<string, unknown>, strategyId: string) {
   const startingBalance = number(stats.starting_balance, Number.MIN_VALUE, AMOUNT_LIMIT);
   if (!Array.isArray(stats.trades) || stats.trades.length > MAX_TRADES) return fail();
@@ -127,24 +200,25 @@ function analyze(stats: Record<string, unknown>, strategyId: string) {
 
 export class Report {
   #analyses!: Analysis[];
+  #contexts!: ExperimentContext[];
+  #tradeBounds!: { earliestTimestamp: number | null; latestTimestamp: number | null }[];
   #hash!: string;
   #demo!: boolean;
   constructor(bytes: Buffer, demo = false) {
-    if (bytes.length === 0 || bytes.length > MAX_BYTES) return fail();
-    let raw: unknown;
-    try {
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      raw = JSON.parse(text);
-      rejectAmbiguousJson(text);
-    }
-    catch { return fail(); }
+    const raw = parseStrictJson(bytes);
     const root = object(raw);
     const entries = Object.entries(object(root.strategy));
     if (!entries.length || entries.length > MAX_STRATEGIES) return fail();
     let trades = 0;
+    this.#contexts = [];
+    this.#tradeBounds = [];
     this.#analyses = entries.map(([, value], index) => {
       const stats = object(value);
-      const result = analyze(stats, `strategy-${index + 1}`);
+      const result = AnalysisSchema.parse(analyze(stats, `strategy-${index + 1}`));
+      this.#contexts.push(extractExperimentContext(stats));
+      const rows = stats.trades as Record<string, number>[];
+      this.#tradeBounds.push({ earliestTimestamp: rows.length ? Math.min(...rows.map(t => t.open_timestamp ?? t.close_timestamp!)) : null,
+        latestTimestamp: rows.length ? Math.max(...rows.map(t => t.close_timestamp!)) : null });
       trades += result.derived.tradeCount;
       if (trades > MAX_TRADES) return fail();
       return result;
@@ -162,6 +236,20 @@ export class Report {
     const value = this.#analyses.find(s => s.strategyId === strategyId);
     if (!value) throw new Error('UNKNOWN_STRATEGY');
     return structuredClone({ schemaVersion: 1, reportSha256: this.#hash, demo: this.#demo, ...value });
+  }
+  snapshot(operatorContexts: Record<string, OperatorContext> = {}): ReportSnapshot {
+    const contexts = z.record(z.string().regex(/^strategy-([1-9]|[12][0-9]|3[0-2])$/), OperatorContextSchema).parse(operatorContexts);
+    if (Object.keys(contexts).some(id => !this.#analyses.some(a => a.strategyId === id))) return fail();
+    return ReportSnapshotSchema.parse({
+      schemaVersion: 2, parserVersion: 'freqtrade-reduced-v2', reportSha256: this.#hash, demo: this.#demo,
+      analyses: this.#analyses.map((a, i) => {
+        const context = resolveOperatorContext(this.#contexts[i]!, contexts[a.strategyId]);
+        const period = context.period.value, bounds = this.#tradeBounds[i]!;
+        if (period && bounds.earliestTimestamp !== null && bounds.latestTimestamp !== null
+            && (bounds.earliestTimestamp < period.startEpochMilliseconds || bounds.latestTimestamp > period.endEpochMilliseconds)) return fail();
+        return { ...structuredClone(a), context };
+      }),
+    });
   }
 }
 export function loadReport(path: string): Report {

@@ -1,0 +1,74 @@
+{
+  "strategy": {
+    "fictitious_fixture": {
+      "starting_balance": 1000,
+      "stake_currency": "USDT",
+      "timeframe": "5m",
+      "pairlist": [
+        "BTC/USDT"
+      ],
+      "trading_mode": "spot",
+      "margin_mode": "",
+      "backtest_start_ts": 1767225600000,
+      "backtest_end_ts": 1767484800000,
+      "backtest_run_start_ts": 1792324800,
+      "backtest_run_end_ts": 1792324801,
+      "trades": [
+        {
+          "pair": "BTC/USDT",
+          "stake_amount": 1000,
+          "profit_abs": 20,
+          "profit_ratio": 0.02,
+          "is_open": false,
+          "open_timestamp": 1767225600000,
+          "close_timestamp": 1767225900000,
+          "leverage": 1,
+          "exit_reason": "roi"
+        },
+        {
+          "pair": "BTC/USDT",
+          "stake_amount": 1000,
+          "profit_abs": 0,
+          "profit_ratio": 0.0,
+          "is_open": false,
+          "open_timestamp": 1767268800000,
+          "close_timestamp": 1767269100000,
+          "leverage": 1,
+          "exit_reason": "roi"
+        },
+        {
+          "pair": "BTC/USDT",
+          "stake_amount": 1000,
+          "profit_abs": 5,
+          "profit_ratio": 0.005,
+          "is_open": false,
+          "open_timestamp": 1767312000000,
+          "close_timestamp": 1767312300000,
+          "leverage": 1,
+          "exit_reason": "force_exit"
+        }
+      ],
+      "left_open_trades": [
+        {
+          "pair": "BTC/USDT",
+          "stake_amount": 1000,
+          "profit_abs": 5,
+          "profit_ratio": 0.005,
+          "is_open": false,
+          "open_timestamp": 1767312000000,
+          "close_timestamp": 1767312300000,
+          "leverage": 1,
+          "exit_reason": "force_exit"
+        }
+      ],
+      "total_trades": 3,
+      "wins": 2,
+      "losses": 0,
+      "draws": 1,
+      "profit_total_abs": 25,
+      "profit_total": 0.025,
+      "max_relative_drawdown": 0,
+      "max_drawdown_account": 0
+    }
+  }
+}
