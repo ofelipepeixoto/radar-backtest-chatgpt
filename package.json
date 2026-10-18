@@ -1,0 +1,24 @@
+{
+  "name": "radar-backtest-chatgpt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only local MCP lab for reviewing offline Freqtrade backtest exports",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "start:stdio": "node dist/src/stdio.js",
+    "start:http": "node dist/src/http.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "5.9.3"
+  }
+}
