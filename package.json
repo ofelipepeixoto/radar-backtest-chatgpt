@@ -13,12 +13,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/test/*.test.js",
     "start:stdio": "node dist/src/stdio.js",
-    "start:http": "node dist/src/http.js"
+    "start:http": "node dist/src/http.js",
+    "start:remote": "node dist/src/remote.js",
+    "admin": "node dist/src/admin.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
-    "zod": "3.25.76",
-    "jose": "6.2.12"
+    "jose": "6.2.12",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

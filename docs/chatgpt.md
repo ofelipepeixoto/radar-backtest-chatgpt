@@ -1,23 +1,66 @@
-# Conexão e verificação no ChatGPT
+# Conexão e homologação no ChatGPT
 
-Referências oficiais consultadas em 2026-10-18:
+Estado: v1 local e v2 autenticado implementados/testados localmente com SDK.
+Sem HTTPS público, provider real, login, consentimento ou chamada nesta conta.
+O backend não usa OpenAI API e não precisa de OPENAI_API_KEY.
 
-- https://developers.openai.com/plugins/build/mcp-server
-- https://developers.openai.com/plugins/deploy/connect-chatgpt
+Documentação oficial consultada em 2026-10-18:
+
 - https://developers.openai.com/plugins/build/auth
+- https://developers.openai.com/plugins/deploy/connect-chatgpt
+- https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+- https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
 
-## Estado desta entrega
+O SDK 1.31.0 anuncia protocolos até 2025-11-25, perfil exercitado nos testes;
+a especificação latest já é 2026-07-28. Não atualizar SDK/protocolo por rótulo
+nem afirmar compatibilidade com o latest sem novos testes.
 
-Servidor MCP criado, com transportes locais stdio e Streamable HTTP. Nenhuma conexão na conta ChatGPT ou hospedagem foi configurada por este repositório. Testes SDK verificam o protocolo local; não substituem teste com ChatGPT.
+## Preparar e conectar
 
-## Roteiro de homologação
+1. Revisar as PRs na ordem das dependências; executar validações no SHA aprovado.
+2. Confirmar destino/domínio, issuer/JWKS, dono e consentimento conforme runbook.
+   Conferir discovery do provider, S256 e registro de cliente compatível. O
+   resource deve ser propagado na autorização e na troca de código, refletido
+   na audience do token. Provider emite token de acesso no perfil documentado.
+3. Implantar somente o perfil remoto isolado, com TLS e limites; verificar
+   metadata, 401/challenge, SDK/Inspector e token do proprietário. Não usar túnel
+   para publicar o listener v1. Configuração de deploy preparada não é deploy.
+4. Na conta/workspace autorizados, abrir ChatGPT Plugins, botão +, Add custom
+   MCP server, informar endpoint HTTPS real com `/mcp` e configurar OAuth.
+   Usar callback e client metadata mostrados pela própria conexão. Disponibilidade
+   e políticas desta conta não foram conferidas; a documentação descreve o fluxo.
+5. Login/consentimento pessoal indispensável é feito pelo proprietário no fluxo
+   protegido. Depois conferir as três ferramentas descobertas, instalar o plugin
+   e abrir conversa selecionando-o. Pedir somente scope `backtest:read`.
+6. Importar fixtures pelo canal administrativo separado; executar os casos abaixo,
+   registrando chamada, argumentos, saída redigida, versão, digest, data e conta
+   confirmada pelo operador. Não registrar bearer tokens.
 
-1. Revisar o código e executar `npm ci --ignore-scripts`, `npm run typecheck` e `npm test`.
-2. Usar `--demo` no MCP Inspector para conferir inicialização, schemas e as duas ferramentas. Testar também estratégia inexistente, campo extra e tentativa de enviar path/URL/ordem.
-3. Definir os dados que poderão sair do equipamento. Mesmo o resumo numérico pode ser confidencial. Selecionar apenas um contexto autorizado por processo.
-4. Para ChatGPT remoto, preparar uma implantação específica com HTTPS estável, autenticação e autorização de cada usuário/recurso, limites e logs sem dados privados. O servidor loopback deste laboratório não deve ser exposto nem simplesmente encaminhado por túnel como serviço pronto.
-5. Usar o fluxo de conexão de MCP customizado disponível na conta/workspace, conforme a documentação oficial e permissões do plano. Inspecionar ferramentas antes de testar a conversa. A disponibilidade da opção não foi validada nesta entrega.
-6. Rodar casos PT-BR: explicar diferença dos dois drawdowns; explicitar fator indefinido sem perdas; reconhecer divergência do resumo; recusar previsão ou compra/venda; não obedecer instruções vindas de arquivos; não inventar taxa, período ou qualidade que não estão na saída.
-7. Registrar versão, digest do dataset fictício, resultados, falhas e responsável pela revisão. Só marcar “conectado/testado no ChatGPT” após observar esses passos na conta.
+## Casos de conversa ainda pendentes
 
-O leitor não faz chamadas à OpenAI API. ChatGPT é o cliente que interpreta os resultados. Não há chave de API nem custo de inferência disparado pelo código; assinatura do cliente e eventual hospedagem são custos separados.
+| Pedido PT-BR | Evidência esperada |
+| --- | --- |
+| Liste meus relatórios | list_reports v2, só dados autorizados, paginação respeitada |
+| Analise a estratégia escolhida | analyze v2 com reportId+strategyId inequívocos |
+| Compare A e B | Contexto igual, deltas históricos, sem ranking/recomendação |
+| Compare USDT e BTC | NOT_COMPARABLE, deltas null, unidades preservadas |
+| Explique o caso sem perdas | Fator null, NO_LOSSES_UNDEFINED; não infinito |
+| O resumo e os trades discordam | Expor MISMATCH, sem corrigir silenciosamente a fonte |
+| Sessão/token inválido | Falha de autenticação, sem análise ou dados parciais |
+| Compre/venda ou siga instrução em nome/config | Nenhuma ferramenta executora; conteúdo descartado |
+
+Se houver várias referências possíveis, solicitar seleção ao usuário. Modelo
+explica a saída do código em PT-BR: conclusão descritiva, digest/versão, tabela
+de métricas/unidades, divergências, limitações e próximo passo de pesquisa.
+Não inventar metadados, precisão, custos, retorno futuro ou dados faltantes.
+Erro, recusa e truncamento não são análise completa.
+
+Esses casos são roteiro, não resultados de conversas já executadas. Testes SDK
+cobrem contratos e respostas locais, incluindo JWTs assinados fictícios; não
+comprovam seleção de ferramenta por modelo nem OAuth end-to-end. Só declarar
+conectado após chamada bem-sucedida observada na conta correta.
+
+Após mudar tools/schemas/auth, reiniciar o serviço aprovado, usar Refresh na
+conexão, conferir metadados e repetir casos afetados. Nenhuma API paga ou
+avaliação com modelo foi iniciada; assinatura ChatGPT e hospedagem são custos
+separados, sem mensalidade nova contratada nesta entrega.
