@@ -1,71 +1,101 @@
 # Radar Backtest · ChatGPT
 
-Laboratório autoral para consultar resultados históricos do Freqtrade por MCP. O operador seleciona um arquivo local uma vez; ChatGPT pode listar estratégias anônimas e examinar métricas determinísticas. Este projeto não executa Freqtrade, estratégias Python, previsões, ordens ou chamadas a exchanges.
+Leitor independente de resultados históricos Freqtrade: importação administrativa,
+catálogo privado, métricas determinísticas e comparação por contexto. ChatGPT
+interpreta a evidência retornada pelas consultas MCP. O backend é determinístico,
+sem LLM, execução de estratégias, conexão a exchanges, custódia ou ordens.
 
-Status: implementação experimental para revisão em PR. Testes locais do protocolo não significam que o plugin está conectado à sua conta ChatGPT.
+Status: piloto em PRs dependentes para revisão humana. Código e protocolo
+verificados localmente; provedor OAuth, HTTPS público, consentimento e conexão
+na conta ChatGPT ainda não homologados. Não é produção nem integração Capital
+instalada. Nenhum merge automático ou recurso pago foi solicitado.
 
-## Iniciar
+## Perfis e início local
 
-Requer Node.js 22 ou superior e npm. A instalação usa versões fixadas no lockfile.
+Requer Node.js 22+ em Linux/POSIX. `npm ci --ignore-scripts`, `npm run typecheck`
+e `npm test` instalam/validam o projeto. Lockfile fixa dependências.
 
-```bash
-npm ci --ignore-scripts
-npm run typecheck
-npm test
-npm run start:stdio -- --demo
-```
-
-Para testar Streamable HTTP local:
-
-```bash
-npm run start:http -- --demo
-```
-
-Endpoint: `http://127.0.0.1:8788/mcp`. A variável `PORT` aceita inteiros de 1024 a 65535. O serviço não tem autenticação e aceita somente Host e Origin locais exatos; não publique essa porta nem a coloque atrás de um proxy remoto. A seleção `--demo` é explícita e sempre identificada como fictícia nas respostas.
-
-Para um relatório próprio, substitua `--demo` por `--report /caminho/local/resultado.json`. Não envie chaves ou configurações de exchange ao serviço. Não há arquivo `.env`, API paga, persistência ou banco necessário.
-
-## Formato aceito
-
-Freqtrade atual salva um ZIP. Selecione previamente, com uma ferramenta local confiável, **somente o JSON principal do resultado**, contendo `strategy`, e coloque-o em um arquivo regular. `_config.json`, `.meta.json`, arquivos Python, pickle, joblib, ZIP e Feather não são entradas aceitas. Este laboratório não descompacta nem executa o pacote.
-
-Contrato de compatibilidade estudado: [Freqtrade `23eeadc864352d3c1af8b6cf80bdf30ff17849a3`](https://github.com/freqtrade/freqtrade/tree/23eeadc864352d3c1af8b6cf80bdf30ff17849a3). Limites: 2 MiB de JSON, até 32 estratégias e 10.000 trades no total; cada trade deve ter `is_open: false`, `close_timestamp` em milissegundos e `profit_abs` e `profit_ratio` numéricos finitos. Cada estratégia exige `starting_balance` positivo. Campos não usados são descartados. Esses limites restringem a compatibilidade; não definem todos os arquivos válidos do Freqtrade.
-
-## Ferramentas
-
-| Ferramenta | Entrada | Resultado |
+| Perfil | Como iniciar | Fronteira |
 | --- | --- | --- |
-| `backtest_list_reports` | `{}` | Digest do arquivo, flag demo e IDs `strategy-1`, `strategy-2`… |
-| `backtest_analyze_report` | `{"strategyId":"strategy-1"}` | Contagens, lucro absoluto, retorno descritivo, fator de lucro e divergências |
+| Local v1 stdio | `npm run start:stdio -- --demo` | Fixture explícita ou `--report <arquivo>` escolhido pelo operador |
+| Local v1 HTTP | `npm run start:http -- --demo` | Somente `http://127.0.0.1:8788/mcp`, Host/Origin locais; não expor |
+| Privado v2 remoto | `BACKTEST_CONFIG=<configuração-protegida> npm run start:remote` | JWT por requisição, um dono, catálogo próprio; HTTPS via proxy isolado |
 
-Não há parâmetros para paths, URLs, código, credenciais, aprovações ou ordens. IDs são locais ao arquivo carregado e seguem a ordem das estratégias; não são identidades duráveis. Para citar uma evidência use digest + ID. Nenhum nome, par negociado, comentário, tag ou configuração original retorna ao cliente. Valores agregados ainda podem ser confidenciais.
+O perfil remoto usa configuração do operador com issuer/JWKS/resource HTTPS,
+subject autorizado e pasta privada. Não transforma o listener v1 em serviço
+remoto. O exemplo de configuração contém placeholders `.invalid`; não é um
+endpoint implantado. Preparação, transferência, parada e recuperação no
+[runbook](docs/runbook.md).
 
-## Interpretar resultados
+## Importar e consultar
 
-- `closedTradeReturnRatio` é soma de `profit_abs` dividida pelo saldo inicial: `0.015` significa 1,5%. Não é média do retorno por trade, retorno anualizado ou previsão.
-- Trades `force_exit` já estão em `trades`; a lista `left_open_trades` não é somada novamente.
-- Sem perdas, fator de lucro é `null` com status explícito; não é infinito nem um sinal de segurança. Sem trades, a taxa de acerto também é `null`.
-- `reportedUnverified` separa métricas declaradas de cálculos refeitos. `max_relative_drawdown` é o maior drawdown relativo; `max_drawdown_account` corresponde ao episódio de maior perda absoluta. Não recalculamos drawdown sem a curva de patrimônio.
-- Divergências em campos checados produzem `MISMATCH`. Ausência de divergência não autentica dados nem valida uma estratégia. O digest identifica bytes e não prova autoria ou origem.
-- Contagens seguem o sinal de `profit_ratio`, como no upstream; esse campo é arredondado independentemente de `profit_abs`. Resumos são comparados com tolerância relativa de 1e-8, sem tolerância absoluta universal. JSON com chaves duplicadas ou profundidade acima de 64 é rejeitado. Sem campos comparáveis, o status é `NO_FIELDS_CHECKED`.
-- Custos, slippage, dados ausentes, seleção de ativos, vazamento temporal, recursive bias, múltiplas tentativas e desempenho fora da amostra não são avaliados pelo leitor. Valores usam ponto flutuante; não servem como contabilidade.
+A CLI administrativa transfere bytes exatos via HTTPS com token de sessão em
+arquivo protegido; não é ferramenta do modelo. Um anexo do Work precisa ser
+transferido explicitamente para o serviço. Só entra o JSON principal contendo
+`strategy`: selecionar fora deste runtime o JSON do ZIP Freqtrade. ZIP, scripts,
+estratégias Python, pickle/joblib, URLs e paths de modelo não são aceitos.
 
-## ChatGPT
+O catálogo persiste apenas projeções/contextos reduzidos, com UUID, digest,
+versão e importação UTC, em arquivos privados 0600/diretório 0700. Um proprietário
+é identificado pelo backend; o namespace da pasta fica vinculado ao issuer.
+Imports repetidos são idempotentes; interrupções não publicam dados parciais.
+Originais, nomes, pares, notas e configs não são guardados nem retornados.
+Hashes e agregados continuam privados, sem promessa de anonimato.
 
-O servidor usa o SDK oficial MCP e oferece stdio para clientes locais e Streamable HTTP para teste local. A conexão na conta ChatGPT, hospedagem HTTPS, OAuth e avaliação com modelos reais continuam pendentes. Veja [o roteiro de conexão](docs/chatgpt.md). Este projeto não instala um plugin automaticamente e não precisa de `OPENAI_API_KEY`.
+| Tool | Entrada |
+| --- | --- |
+| `backtest_v2_list_reports` | `{limit?,cursor?}` |
+| `backtest_v2_analyze_report` | `{reportId,strategyId}` |
+| `backtest_v2_compare_reports` | `{left:{reportId,strategyId},right:{reportId,strategyId}}` |
 
-## Arquitetura e ecossistema
+`strategy-1` pertence a um relatório específico. Campos de identidade, aprovação,
+código, path e URL são rejeitados. Só o token verificado determina acesso. Os
+nomes v1 `backtest_list_reports`/`backtest_analyze_report` continuam no perfil
+local e mantêm seus schemas. [Contratos v2](docs/contracts-v2.md).
 
-Separação de responsabilidades: Freqtrade produz o experimento fora deste processo; este leitor valida e reduz o resultado; ChatGPT explica o resumo com suas limitações. Capital Web3 pode consumir o resumo para revisão humana; TradingAgents mantém análise textual e Kronos seus experimentos temporais. Integrações com esses projetos estão propostas, não homologadas. [ADR](docs/adr/0001-offline-report-boundary.md).
+## Evidência e comparação
 
-## Segurança, operação e evolução
+`profit_total=0.015` significa 1,5%, sem média de retornos individuais ou câmbio.
+Contagens seguem o sinal de profit_ratio; force_exit já está em trades e não
+é somado outra vez em left_open_trades. Sem perdas, fator de lucro é null com
+estado explícito. Os dois drawdowns declarados não são intercambiáveis nem
+recalculados. Não há recálculo de Sharpe/CAGR/mark-to-market.
 
-O arquivo é lido antes de conectar o cliente; nenhuma ferramenta pode trocá-lo. Não há gravações, egress de negócio, subprocessos ou reexecução de estratégias. HTTP tem limite de 16 KiB por pedido e timeout de 10 segundos. stdout de stdio é reservado ao protocolo; erros não mostram paths ou conteúdo. Encerrar o processo remove o estado em memória. Arquivos, permissões e backups permanecem sob responsabilidade do operador.
+Contexto separa período histórico em milissegundos, execução em segundos e
+importação ISO UTC. Cada campo declara EXPORT/OPERATOR/UNKNOWN. Período,
+moeda, saldo, timeframe, universo/dataset, taxas/slippage e alavancagem/modo
+precisam permitir comparação. Lacuna ou diferença decisiva produz
+`NOT_COMPARABLE` e deltas null; diferenças de versão/resumo geram ressalvas.
+Ranking de investimento permanece desabilitado. Igualdade de declarações não
+comprova dados, custos, ausência de viés ou causalidade.
 
-As marcações MCP `readOnlyHint` são metadados, não autorização. O transporte local confia no usuário do sistema operacional; não oferece isolamento entre clientes ou tenants. Limites de concorrência, autenticação, retenção, rate limiting distribuído e revisão de dados precisam existir antes de um serviço remoto. Consulte [SECURITY.md](SECURITY.md).
+SHA-256 identifica bytes; não prova autoria, veracidade ou qualidade do backtest.
+Limites: 2 MiB/64 níveis/32 estratégias/10.000 trades; validação UTF-8, duplicatas,
+finitude, tipos e faixas, sem coerção financeira. Sem dados, usar null/ausente.
+Tolerância relativa 1e-8 e aritmética descritiva de ponto flutuante permanecem.
 
-Roadmap: revisar PR e contratos; validar exports de outras versões; avaliar explicações PT-BR em conjunto de casos; escolher hospedagem e identidade; só então conectar e homologar ChatGPT com dados autorizados. Não há plano de ordens via LLM nesta versão.
+## Exemplos, validação e ChatGPT
 
-## Licença e origem
+`examples/` contém apenas fixtures autorais fictícias: lucro 15/25 USDT, moeda BTC,
+sem perdas e resumo inconsistente, mais contextos completos/ausentes/conflitantes.
+Esses arquivos não foram produzidos rodando Freqtrade e não demonstram retorno
+econômico. A suíte cobre parser, catálogo/restart/restore, comparação, JWT,
+scopes, acesso cruzado, SDK real stdio/HTTP e limites. Teste SDK não é conversa
+homologada na conta. [Roteiro ChatGPT](docs/chatgpt.md).
 
-Código deste leitor: MIT, copyright Carlos Felipe Peixoto. Implementação independente escrita a partir do estudo do formato; nenhum código, estratégia, modelo, asset ou dataset Freqtrade foi incorporado. Não é fork, substituto do motor, projeto oficial ou implementação formalmente certificada como clean-room. O [Freqtrade](https://github.com/freqtrade/freqtrade) mantém seus autores e licença GPLv3. Copiar ou redistribuir seu código exige cumprir essa licença; MIT deste leitor não relicencia o upstream. Dependências mantêm licenças próprias. Referências em [THIRD_PARTY.md](THIRD_PARTY.md).
+Compatibilidade estudada: Freqtrade `23eeadc864352d3c1af8b6cf80bdf30ff17849a3`
+(`2026.10-dev`), sem ampliar suporte para toda release 2026.9 estável. SDK MCP
+1.31.0 com protocolo testado 2025-11-25; não reivindica suporte à especificação
+mais recente 2026-07-28. [Decisão de arquitetura](docs/adr/0002-private-catalog.md).
+
+Capital Web3 tem [proposta de interoperabilidade](docs/capital-interop.md) com
+rascunho fictício e revisão humana. Não altera NAV/posições ou outros repositórios.
+n8n, Supabase, RAG e APIs pagas não são dependências deste piloto.
+
+## Licenças
+
+Leitor original: MIT, copyright Carlos Felipe Peixoto. Sem código, estratégia,
+modelo ou dataset GPLv3 Freqtrade incorporado. Estudo independente do formato,
+sem afiliação oficial ou certificação clean-room. Freqtrade conserva seus autores
+e GPLv3; dependências mantêm licenças próprias. [Terceiros](THIRD_PARTY.md),
+[segurança](SECURITY.md) e [ADR original](docs/adr/0001-offline-report-boundary.md).

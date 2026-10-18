@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "storageDir": "/data/reports",
+  "resource": "https://backtest.example.invalid/mcp",
+  "issuer": "https://identity.example.invalid/",
+  "jwksUrl": "https://identity.example.invalid/jwks",
+  "ownerSubject": "REPLACE_WITH_VERIFIED_OWNER_SUBJECT",
+  "port": 8789,
+  "listenHost": "0.0.0.0",
+  "allowedOrigins": []
+}
