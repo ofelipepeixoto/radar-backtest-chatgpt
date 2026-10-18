@@ -5,7 +5,9 @@
   "description": "Read-only local MCP lab for reviewing offline Freqtrade backtest exports",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -15,7 +17,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
