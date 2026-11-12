@@ -1,0 +1,47 @@
+{
+  "schema_version": "0.1.0",
+  "status": "degraded",
+  "request_id": "backtest-fixture-review-001",
+  "as_of": "2026-10-18T00:00:00Z",
+  "sources": [
+    {
+      "id": "sha256:acf4219f00a63c64feee749ec42b4bb32c9f92a3ef1813a28c3ae69eae38e3d9",
+      "kind": "synthetic",
+      "as_of": "2026-01-04T00:00:00Z"
+    }
+  ],
+  "data_quality": {
+    "mode": "synthetic_mock",
+    "freshness": "not_live",
+    "notes": [
+      "Exemplo autoral fictício. Não é um backtest executado no Freqtrade.",
+      "As declarações do operador não validam independentemente o dataset, custos ou versão."
+    ]
+  },
+  "findings": [
+    {
+      "id": "historical-summary",
+      "severity": "info",
+      "title": "Retorno histórico fictício descritivo",
+      "evidence": "reportSha256=acf4219f00a63c64feee749ec42b4bb32c9f92a3ef1813a28c3ae69eae38e3d9; parser schemaVersion=1; strategyId=strategy-1; 4 trades; lucro líquido de 15 unidades USDT; retorno fracionário 0.015 (1.5%); fator de lucro 2.5. Valores esperados do leitor determinístico, sujeitos à verificação local."
+    }
+  ],
+  "alternatives": [
+    "Manter este resultado apenas como evidência de pesquisa, sem decisão de investimento."
+  ],
+  "limitations": [
+    "BACKTEST_ONLY; SOURCE_NOT_AUTHENTICATED; NO_INVESTMENT_RECOMMENDATION.",
+    "O hash identifica bytes; não prova autoria ou validade financeira.",
+    "Este JSON não altera NAV, posições, permissões, publicação ou aprovação.",
+    "Revisão humana autenticada e associação a um caso Capital Web3 são etapas externas ainda não conectadas."
+  ],
+  "human_review": {
+    "required": true,
+    "reviewer": null,
+    "approved": false
+  },
+  "next_steps": [
+    "Recalcular a fixture com o leitor e conferir digest/versão.",
+    "Submeter o resumo à revisão humana no backend Capital somente após implementação de um adapter autorizado."
+  ]
+}

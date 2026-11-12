@@ -1,0 +1,44 @@
+# Preparation only. No domain, network, certificate resolver or host path is assumed.
+services:
+  backtest:
+    build:
+      context: ..
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 384m
+    cpus: 0.5
+    environment:
+      BACKTEST_CONFIG: /run/backtest/config.json
+    volumes:
+      - type: bind
+        source: ${BACKTEST_CONFIG_FILE:?set protected dedicated config file}
+        target: /run/backtest/config.json
+        read_only: true
+      - type: bind
+        source: ${BACKTEST_DATA_DIR:?set dedicated private data directory}
+        target: /data
+    tmpfs:
+      - /tmp:size=16m,mode=700,uid=1000,gid=1000
+    networks: [backtest, ingress]
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: ${TRAEFIK_NETWORK:?set existing network}
+      traefik.http.routers.radar-backtest.rule: Host(`${BACKTEST_DOMAIN:?set approved domain}`)
+      traefik.http.routers.radar-backtest.entrypoints: ${TRAEFIK_HTTPS_ENTRYPOINT:?set existing HTTPS entrypoint}
+      traefik.http.routers.radar-backtest.tls: 'true'
+      traefik.http.routers.radar-backtest.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:?set existing resolver}
+      traefik.http.services.radar-backtest.loadbalancer.server.port: '8789'
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '3'
+    stop_grace_period: 15s
+networks:
+  backtest: {}
+  ingress:
+    external: true
+    name: ${TRAEFIK_NETWORK:?set existing network}

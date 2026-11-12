@@ -6,3 +6,7 @@ coverage/
 *.csv
 reports/
 .env*
+data/
+*.pem
+*.key
+*.token
