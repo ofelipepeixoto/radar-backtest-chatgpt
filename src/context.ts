@@ -32,8 +32,8 @@ const ModeSchema = z.object({
   margin: z.enum(['NONE', 'ISOLATED', 'CROSS']),
 }).strict().refine(m => (m.trading === 'SPOT') === (m.margin === 'NONE'));
 const provenance = z.enum(['EXPORT', 'OPERATOR', 'UNKNOWN']);
-function field<T extends z.ZodTypeAny>(schema: T) {
-  return z.object({ value: schema.nullable(), provenance }).strict()
+function field<T>(schema: z.ZodType<T>) {
+  return z.object({ value: z.nullable(schema), provenance }).strict()
     .refine(f => (f.value === null) === (f.provenance === 'UNKNOWN'));
 }
 export const ExperimentContextSchema = z.object({
